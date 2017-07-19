@@ -1,40 +1,38 @@
 (ns kauppalehti-omxh.core
-  (:require [net.cgrand.enlive-html :as html]
-    [org.httpkit.client :as http]))
+  (:require [net.cgrand.enlive-html :as html]))
 
-(defn parse-int [s]
-   (Integer. (re-find  #"\d+" s )))
+(defn parse-number
+  [s]
+  (if (re-find #"^-?\d+\.?\d*$" s)
+    (read-string s)))
 
-(defn get-dom
-  []
-  (html/html-snippet
-    (:body @(http/get "http://app.kauppalehti.fi/market/stockexchange"
-                      {:insecure? true}))))
+;; (defn get-dom
+;;   []
+;;   (html/html-snippet
 
-(defn extract-value
+(defn parse-value
   [stock, selector]
-  (:content (first (html/select stock [selector]))))
+  (html/text (first (html/select stock [selector]))))
 
-(defn extract-stock
-    [date, stock]
-    { :name (extract-value stock :span.stock-item-name)
-      :date date
-      :value (parse-int (str (extract-value stock :span.stock-item-value))) })
+(defn parse-stock
+    [stock]
+    { :name (parse-value stock :span.stock-item-name)
+      :volume (parse-value stock :span.stock-item-volume)
+      :change (parse-value stock :span.stock-item-change)
+      :value (parse-number (parse-value stock :span.stock-item-value))})
 
-(defn extract-date
+(defn parse-stocks
     [dom]
-    (:content (last (html/select dom [:span.graph-time, :span]))))
+    (map (fn [stock-dom] (parse-stock stock-dom))
+         (html/select dom [:div.stock-item])))
 
-(defn extract-stocks
-    [dom]
-    (let [date (extract-date dom)]
-    (map (fn [x] (extract-stock date x)) (html/select dom [:div.stock-item]))))
-
-(defn get-stocks
-  []
-  (extract-stocks (get-dom)))
+(defn stocks
+  [html]
+  (parse-stocks (html/html-snippet html)))
 
 (defn -main
   [& args]
-  (let [stocks (get-stocks)]
-    (println stocks)))
+;;  (let [ dom (:body @(http/get "http://app.kauppalehti.fi/market/stockexchange"
+;;                               {:insecure? true}))]
+  (let [dom (slurp "kauppalehti.htm")]
+    (println (stocks dom))))
